@@ -19,7 +19,7 @@ pub mod escrow {
         escrow.vault_authority_bump = ctx.bumps.vault_authority;
 
         let cpi_ctx = CpiContext::new(
-            ctx.accounts.associated_token_program.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
             Transfer{
                 from : ctx.accounts.authority_token_account.to_account_info(),
                 to : ctx.accounts.escrow_token_account.to_account_info(),
@@ -30,6 +30,27 @@ pub mod escrow {
 
         Ok(())
     }
+    pub fn release_escrow(ctx: Context<ReleaseEscrow>) -> Result<()> {
+        require!(ctx.accounts.escrow.recipient == ctx.accounts.recipient.key(), EscrowError::InvalidRecipient);
+
+        let escrow_key = ctx.accounts.escrow.key();
+
+        let signer_seeds: &[&[&[u8]]] = &[&[b"vault_authority", escrow_key.as_ref(),&[ctx.accounts.escrow.vault_authority_bump]]];
+
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer{
+                from : ctx.accounts.escrow_token_account.to_account_info(),
+                to : ctx.accounts.recipient_token_account.to_account_info(),
+                authority : ctx.accounts.vault_authority.to_account_info(),
+            },
+            signer_seeds
+        );
+        anchor_spl::token::transfer(cpi_ctx, ctx.accounts.escrow.amount)?;
+        
+        Ok(())
+    }
+
 }
 
 #[derive(Accounts)]
@@ -61,7 +82,10 @@ pub struct InitializeEscrow<'info> {
     #[account(mut)]
     pub authority : Signer<'info>,
 
-
+    #[account(
+        constraint = authority_token_account.mint == mint.key(),
+        constraint = authority_token_account.owner == authority.key(),
+    )]
     pub authority_token_account : Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -104,6 +128,7 @@ pub struct ReleaseEscrow<'info> {
     pub recipient_token_account : Account<'info, TokenAccount>,
 
     pub recipient : Signer<'info>,
+    pub token_program : Program<'info,Token>
 }
 
 #[account]
@@ -113,4 +138,10 @@ pub struct Escrow {
     pub mint : Pubkey,
     pub amount : u64,
     pub vault_authority_bump : u8,
+}
+
+#[error_code]
+pub enum EscrowError {
+    #[msg("Invalid recipient")]
+    InvalidRecipient,
 }
