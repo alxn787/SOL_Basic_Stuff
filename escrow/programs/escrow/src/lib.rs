@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token::{Mint, Token, TokenAccount}};
+use anchor_spl::{associated_token::AssociatedToken, token::{accessor::authority, Mint, Token, TokenAccount}};
 
 declare_id!("4rzg2P9UcKgwbuCbSYyw5XGV3Z5Uxxit85tuTK1tHYkU");
 
@@ -102,6 +102,7 @@ pub struct ReleaseEscrow<'info> {
     #[account(
         mut,
         has_one = recipient,
+        close = authority,
         
     )]
     pub escrow : Account<'info, Escrow>,
@@ -128,6 +129,12 @@ pub struct ReleaseEscrow<'info> {
     pub recipient_token_account : Account<'info, TokenAccount>,
 
     pub recipient : Signer<'info>,
+
+    #[account(
+        constraint = authority.key() == escrow.authority.key(),
+    )]
+    pub authority : AccountInfo<'info>,
+ 
     pub token_program : Program<'info,Token>
 }
 
